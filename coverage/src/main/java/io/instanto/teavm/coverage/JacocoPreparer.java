@@ -167,7 +167,10 @@ public final class JacocoPreparer {
     if (path.isAbsolute() || path.startsWith("..") || !path.normalize().equals(path))
       throw new IOException("Invalid classpath entry " + name);
     byte[] old = inputs.putIfAbsent(name, bytes);
-    if (old != null && !Arrays.equals(old, bytes))
+    // A resource is resolved from the first class root that has it, as on the classpath. Modules
+    // built in one reactor are directories, and each may carry its own copy of a generated
+    // resource; only differing classes would make the prepared classes ambiguous.
+    if (old != null && name.endsWith(".class") && !Arrays.equals(old, bytes))
       throw new IOException("Conflicting classpath entries: " + name);
   }
 

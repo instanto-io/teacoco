@@ -122,6 +122,34 @@ public class JacocoPipelineTest {
   }
 
   @Test
+  public void keepsTheFirstResourceButRejectsDifferingClasses() throws Exception {
+    Path root = directory.newFolder("resources").toPath();
+    Path sources = root.resolve("src"), data = root.resolve("data");
+    Path own = root.resolve("own"), other = root.resolve("other");
+    Files.createDirectories(sources.resolve("fixture"));
+    Path source = sources.resolve("fixture/Sample.java");
+    Files.writeString(source, "package fixture; public class Sample { int one() { return 1; } }");
+    assertEquals(
+        0,
+        ToolProvider.getSystemJavaCompiler()
+            .run(null, null, null, "-g", "-d", own.toString(), source.toString()));
+    for (Path classes : List.of(own, other)) {
+      Files.createDirectories(classes.resolve("META-INF"));
+      Files.writeString(classes.resolve("META-INF/generated.txt"), classes.getFileName() + "\n");
+    }
+    new JacocoPreparer().prepare(data, List.of(sources), List.of(own, other));
+    assertEquals("own\n", Files.readString(data.resolve("jacoco/classes/META-INF/generated.txt")));
+
+    Files.createDirectories(other.resolve("fixture"));
+    Files.write(other.resolve("fixture/Sample.class"), new byte[] {1, 2, 3});
+    var conflict =
+        assertThrows(
+            IOException.class,
+            () -> new JacocoPreparer().prepare(data, List.of(sources), List.of(own, other)));
+    assertEquals("Conflicting classpath entries: fixture/Sample.class", conflict.getMessage());
+  }
+
+  @Test
   public void refusesToReplaceAnUnownedPreparationDirectory() throws Exception {
     Path root = directory.newFolder().toPath();
     Path data = root.resolve("data");
