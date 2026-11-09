@@ -47,6 +47,7 @@
         <version>3.9.0</version>
         <configuration>
           <debug>false</debug>
+          <streamLogsOnFailures>true</streamLogsOnFailures>
           <cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
           <pomIncludes>
             <pomInclude>*/pom.xml</pomInclude>

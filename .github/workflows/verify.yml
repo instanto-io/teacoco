@@ -72,21 +72,24 @@ jobs:
             exit 1
           fi
           settings="$RUNNER_TEMP/teacoco-maven-settings.xml"
+          central_settings="$RUNNER_TEMP/teacoco-central-settings.xml"
           cp .github/maven-settings.xml "$settings"
+          cp central-settings.xml "$central_settings"
           if [ -n "${MAVEN_CENTRAL_MIRROR_URL:-}" ]; then
-            python3 - "$settings" <<'PYSET'
+            python3 - "$settings" "$central_settings" <<'PYSET'
           import pathlib, sys, xml.etree.ElementTree as ET
-          p = pathlib.Path(sys.argv[1])
-          tree = ET.parse(p)
-          root = tree.getroot()
           ns = "http://maven.apache.org/SETTINGS/1.2.0"
           ET.register_namespace("", ns)
-          mirrors = ET.SubElement(root, f"{{{ns}}}mirrors")
-          mirror = ET.SubElement(mirrors, f"{{{ns}}}mirror")
-          ET.SubElement(mirror, f"{{{ns}}}id").text = "central"
-          ET.SubElement(mirror, f"{{{ns}}}mirrorOf").text = "central"
-          ET.SubElement(mirror, f"{{{ns}}}url").text = "${env.MAVEN_CENTRAL_MIRROR_URL}"
-          tree.write(p, encoding="unicode", xml_declaration=True)
+          for raw in sys.argv[1:]:
+              p = pathlib.Path(raw)
+              tree = ET.parse(p)
+              root = tree.getroot()
+              mirrors = ET.SubElement(root, f"{{{ns}}}mirrors")
+              mirror = ET.SubElement(mirrors, f"{{{ns}}}mirror")
+              ET.SubElement(mirror, f"{{{ns}}}id").text = "central"
+              ET.SubElement(mirror, f"{{{ns}}}mirrorOf").text = "central"
+              ET.SubElement(mirror, f"{{{ns}}}url").text = "${env.MAVEN_CENTRAL_MIRROR_URL}"
+              tree.write(p, encoding="unicode", xml_declaration=True)
           PYSET
           fi
           mvn -B -ntp -s "$settings" \
@@ -96,9 +99,10 @@ jobs:
             -Daether.transport.http.retryHandler.interval=10000 \
             -Daether.transport.http.retryHandler.serviceUnavailable=429,502,503,504 \
             -Dmaven.artifact.threads=2 \
+            -Dteacoco.it.settingsFile="$central_settings" \
             -Dmaven.repo.local="$RUNNER_TEMP/teacoco-deploy-m2-${{ github.run_id }}-${{ github.run_attempt }}" \
             -pl coverage,maven-plugin -am clean deploy \
-            -DskipTests -Dspotbugs.skip=true -Djacoco.skip=true -Dmaven.javadoc.skip=true -Dspotless.skip=true
+            -DskipTests -Dinvoker.skip=true -Dspotbugs.skip=true -Djacoco.skip=true -Dmaven.javadoc.skip=true -Dspotless.skip=true
           if [ -n "${MAVEN_CENTRAL_MIRROR_URL:-}" ]; then
             mkdir -p "$GRADLE_USER_HOME/init.d"
             cat > "$GRADLE_USER_HOME/init.d/central-mirror.gradle" <<'GRADLE'
