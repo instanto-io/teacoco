@@ -53,9 +53,20 @@ public final class ReportMojo extends AbstractMojo {
   @Parameter(property = "teacoco.skip", defaultValue = "false")
   private boolean skip;
 
+  /** Skipped tests leave no browser output to report, as with Surefire's own skipTests. */
+  @Parameter(property = "skipTests", defaultValue = "false")
+  private boolean skipTests;
+
+  @Parameter(property = "maven.test.skip", defaultValue = "false")
+  private boolean skipTestCompilation;
+
   @Override
   public void execute() throws MojoExecutionException {
     if (skip) return;
+    if (skipTests || skipTestCompilation) {
+      getLog().info("Tests are skipped, so there is no browser coverage to report");
+      return;
+    }
     try {
       if ("jacoco".equals(mode)) {
         new JacocoReporter()
