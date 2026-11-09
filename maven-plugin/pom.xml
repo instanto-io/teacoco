@@ -9,6 +9,9 @@
   <artifactId>teacoco-maven-plugin</artifactId>
   <packaging>maven-plugin</packaging>
   <name>TeaCoCo Maven reporting</name>
+  <properties>
+    <teacoco.it.settingsFile>${project.basedir}/../central-settings.xml</teacoco.it.settingsFile>
+  </properties>
   <dependencies>
     <dependency><groupId>org.codehaus.plexus</groupId><artifactId>plexus-utils</artifactId><version>3.5.1</version></dependency>
     <dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
@@ -50,7 +53,7 @@
           </pomIncludes>
           <postBuildHookScript>verify</postBuildHookScript>
           <localRepositoryPath>${settings.localRepository}</localRepositoryPath>
-          <settingsFile>${project.basedir}/../central-settings.xml</settingsFile>
+          <settingsFile>${teacoco.it.settingsFile}</settingsFile>
           <goals>
             <goal>clean</goal>
             <goal>verify</goal>

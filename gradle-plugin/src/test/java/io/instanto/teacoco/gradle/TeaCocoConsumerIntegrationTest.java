@@ -41,9 +41,9 @@ public class TeaCocoConsumerIntegrationTest {
         """
         pluginManagement {
             repositories {
-                mavenLocal()
-                gradlePluginPortal()
-                mavenCentral()
+        """
+            + centralRepositories(true)
+            + """
             }
         }
         rootProject.name = 'independent-line-consumer'
@@ -57,8 +57,9 @@ public class TeaCocoConsumerIntegrationTest {
             id 'io.instanto.teacoco'
         }
         repositories {
-            mavenLocal()
-            mavenCentral()
+        """
+            + centralRepositories(false)
+            + """
         }
         teaCoco { mode = 'lines' }
         dependencies {
@@ -115,9 +116,9 @@ public class TeaCocoConsumerIntegrationTest {
         """
         pluginManagement {
             repositories {
-                mavenLocal()
-                gradlePluginPortal()
-                mavenCentral()
+        """
+            + centralRepositories(true)
+            + """
             }
         }
         rootProject.name = 'independent-jacoco-consumer'
@@ -133,8 +134,9 @@ public class TeaCocoConsumerIntegrationTest {
             id 'io.instanto.teacoco'
         }
         repositories {
-            mavenLocal()
-            mavenCentral()
+        """
+            + centralRepositories(false)
+            + """
         }
         dependencies {
             testImplementation 'junit:junit:4.13.2'
@@ -198,7 +200,16 @@ public class TeaCocoConsumerIntegrationTest {
 
     Files.writeString(
         projectDir.resolve("settings.gradle"),
-        "rootProject.name = 'failing-test-fixture'");
+        """
+        pluginManagement {
+            repositories {
+        """
+            + centralRepositories(true)
+            + """
+            }
+        }
+        rootProject.name = 'failing-test-fixture'
+        """);
 
     Files.writeString(
         projectDir.resolve("build.gradle"),
@@ -209,8 +220,9 @@ public class TeaCocoConsumerIntegrationTest {
             id 'io.instanto.teacoco'
         }
         repositories {
-            mavenLocal()
-            mavenCentral()
+        """
+            + centralRepositories(false)
+            + """
         }
         teaCoco { mode = 'lines' }
         dependencies {
@@ -237,6 +249,22 @@ public class TeaCocoConsumerIntegrationTest {
     assertTrue(result.getOutput().contains("Execution failed for task ':test'"));
     // Verify report was still emitted by the test task finalizer
     assertTrue(Files.isRegularFile(projectDir.resolve("build/reports/teacoco/coverage.xml")));
+  }
+
+  private static String centralRepositories(boolean includePluginPortal) {
+    String mirror = System.getenv("MAVEN_CENTRAL_MIRROR_URL");
+    StringBuilder repos = new StringBuilder("                mavenLocal()\n");
+    if (includePluginPortal) {
+      repos.append("                gradlePluginPortal()\n");
+    }
+    if (mirror != null) {
+      String trimmed = mirror.trim();
+      if (trimmed.startsWith("https://") && !trimmed.contains("'") && !trimmed.contains("\n")) {
+        repos.append("                maven { url = '").append(trimmed).append("' }\n");
+      }
+    }
+    repos.append("                mavenCentral()\n");
+    return repos.toString();
   }
 
   private static void checkLineCoverageReport(Path projectDir, Path coverageXml) throws Exception {

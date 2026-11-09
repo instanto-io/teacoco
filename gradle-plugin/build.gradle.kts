@@ -11,7 +11,13 @@ java {
     withSourcesJar()
 }
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
-repositories { mavenCentral() }
+repositories {
+    val centralMirror = providers.environmentVariable("MAVEN_CENTRAL_MIRROR_URL").orNull?.trim().orEmpty()
+    if (centralMirror.startsWith("https://")) {
+        maven(url = uri(centralMirror))
+    }
+    mavenCentral()
+}
 dependencies { testImplementation("junit:junit:4.13.2") }
 
 gradlePlugin {
