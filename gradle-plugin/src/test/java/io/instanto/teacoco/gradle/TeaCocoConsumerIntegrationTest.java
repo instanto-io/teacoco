@@ -82,7 +82,7 @@ public class TeaCocoConsumerIntegrationTest {
         GradleRunner.create()
             .withProjectDir(projectDir.toFile())
             .withPluginClasspath()
-            .withArguments("clean", "teaCocoReport", "--stacktrace");
+            .withArguments(runnerArguments("clean", "teaCocoReport", "--stacktrace"));
 
     BuildResult result = runner.build();
     assertTrue(result.getOutput().contains("BUILD SUCCESSFUL"));
@@ -95,12 +95,12 @@ public class TeaCocoConsumerIntegrationTest {
     Files.writeString(
         projectDir.resolve("build.gradle"),
         buildGradle.replace("'org.teavm.library'", "'org.teavm'"));
-    BuildResult appResult = runner.withArguments("clean", "teaCocoReport").build();
+    BuildResult appResult = runner.withArguments(runnerArguments("clean", "teaCocoReport")).build();
     assertTrue(appResult.getOutput().contains("BUILD SUCCESSFUL"));
     checkLineCoverageReport(projectDir, coverageXml);
 
     // Verify disabled coverage opt-out
-    runner.withArguments("clean", "test", "-PteaCoco.enabled=false").build();
+    runner.withArguments(runnerArguments("clean", "test", "-PteaCoco.enabled=false")).build();
     assertFalse(Files.exists(projectDir.resolve("build/teacoco/data")));
     assertFalse(Files.exists(projectDir.resolve("build/reports/teacoco/coverage.xml")));
   }
@@ -156,7 +156,7 @@ public class TeaCocoConsumerIntegrationTest {
         GradleRunner.create()
             .withProjectDir(projectDir.toFile())
             .withPluginClasspath()
-            .withArguments("clean", "teaCocoReport", "--stacktrace");
+            .withArguments(runnerArguments("clean", "teaCocoReport", "--stacktrace"));
 
     BuildResult result = runner.build();
     assertTrue(result.getOutput().contains("BUILD SUCCESSFUL"));
@@ -182,7 +182,7 @@ public class TeaCocoConsumerIntegrationTest {
     Path manifest = projectDir.resolve("build/teacoco/data/jacoco/manifest.json");
     assertTrue("Manifest must exist", Files.isRegularFile(manifest));
     String initialManifest = Files.readString(manifest);
-    BuildResult rerun = runner.withArguments("teaCocoReport").build();
+    BuildResult rerun = runner.withArguments(runnerArguments("teaCocoReport")).build();
     assertTrue(rerun.getOutput().contains("BUILD SUCCESSFUL"));
     String secondManifest = Files.readString(manifest);
     assertNotEquals(
@@ -243,7 +243,7 @@ public class TeaCocoConsumerIntegrationTest {
         GradleRunner.create()
             .withProjectDir(projectDir.toFile())
             .withPluginClasspath()
-            .withArguments("clean", "test")
+            .withArguments(runnerArguments("clean", "test"))
             .buildAndFail();
 
     assertTrue(result.getOutput().contains("Execution failed for task ':test'"));
@@ -251,17 +251,29 @@ public class TeaCocoConsumerIntegrationTest {
     assertTrue(Files.isRegularFile(projectDir.resolve("build/reports/teacoco/coverage.xml")));
   }
 
+  private static List<String> runnerArguments(String... baseArgs) {
+    List<String> args = new ArrayList<>(Arrays.asList(baseArgs));
+    String localRepo = System.getProperty("maven.repo.local");
+    if (localRepo == null || localRepo.isBlank()) {
+      localRepo = System.getenv("MAVEN_REPO_LOCAL");
+    }
+    if (localRepo != null && !localRepo.isBlank()) {
+      args.add("-Dmaven.repo.local=" + localRepo.trim());
+    }
+    return args;
+  }
+
   private static String centralRepositories(boolean includePluginPortal) {
     String mirror = System.getenv("MAVEN_CENTRAL_MIRROR_URL");
     StringBuilder repos = new StringBuilder("                mavenLocal()\n");
-    if (includePluginPortal) {
-      repos.append("                gradlePluginPortal()\n");
-    }
     if (mirror != null) {
       String trimmed = mirror.trim();
       if (trimmed.startsWith("https://") && !trimmed.contains("'") && !trimmed.contains("\n")) {
         repos.append("                maven { url = '").append(trimmed).append("' }\n");
       }
+    }
+    if (includePluginPortal) {
+      repos.append("                gradlePluginPortal()\n");
     }
     repos.append("                mavenCentral()\n");
     return repos.toString();

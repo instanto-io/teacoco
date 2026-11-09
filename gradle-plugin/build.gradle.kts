@@ -20,6 +20,14 @@ repositories {
 }
 dependencies { testImplementation("junit:junit:4.13.2") }
 
+tasks.withType<Test>().configureEach {
+    val localRepo = providers.systemProperty("maven.repo.local").orNull
+        ?: providers.environmentVariable("MAVEN_REPO_LOCAL").orNull
+    if (!localRepo.isNullOrBlank()) {
+        systemProperty("maven.repo.local", localRepo.trim())
+    }
+}
+
 gradlePlugin {
     plugins {
         create("teaCoco") {
