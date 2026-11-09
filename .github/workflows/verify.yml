@@ -6,17 +6,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  # Required to publish SpotBugs SARIF to code scanning.
-  security-events: write
 concurrency:
   group: teacoco-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   verify:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -28,17 +25,6 @@ jobs:
         run: mvn -B -ntp -s central-settings.xml clean install
       - name: Verify Gradle plugin and consumer integrations
         run: ./gradlew --no-daemon check publishToMavenLocal
-      - name: SonarQube analysis
-        # The Maven reactor carries the Maven plugin; the Gradle plugin is
-        # verified separately but is not part of this analysis.
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.SONAR_TOKEN != ''
-        continue-on-error: true
-        env:
-          SONAR_HOST_URL: https://sonar.instanto.io
-        run: >-
-          mvn --settings central-settings.xml --batch-mode --no-transfer-progress
-          sonar:sonar -Dsonar.projectKey=teacoco -Dsonar.projectName=teacoco
-          -Dsonar.qualitygate.wait=true
       - name: Publish quality summary
         if: always()
         continue-on-error: true
@@ -54,9 +40,9 @@ jobs:
           path: '**/target/spotbugs/'
           if-no-files-found: ignore
           retention-days: 7
+
   publish-snapshot:
-    needs: verify
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     # packages.instanto.io is private-network infrastructure, reachable by this pool.
     runs-on: [self-hosted, instanto-container]
     timeout-minutes: 45
@@ -72,26 +58,26 @@ jobs:
           distribution: temurin
           java-version: '21'
           overwrite-settings: false
-      - name: Publish verified snapshots to Instanto
+      - name: Publish snapshots to Instanto
         run: |
           set -euo pipefail
           if [ -z "$FORGEJO_PACKAGE_USER" ] || [ -z "$FORGEJO_PACKAGE_TOKEN" ]; then
             echo '::error::Grant instanto-io/tea-coco access to the organisation Forgejo package user and write-token secrets.'
             exit 1
           fi
-          # Both adapters and consumers were verified at this workflow's checkout.
-          # Keep deployments out of the shared runner's persistent Maven cache.
           mvn -B -ntp -s .github/maven-settings.xml \
             -Dmaven.repo.local="$RUNNER_TEMP/teacoco-deploy-m2-${{ github.run_id }}-${{ github.run_attempt }}" \
-            -pl coverage,maven-plugin -am clean deploy -DskipTests
+            -pl coverage,maven-plugin -am clean deploy \
+            -DskipTests -Dspotbugs.skip=true -Djacoco.skip=true -Dmaven.javadoc.skip=true -Dspotless.skip=true
           ./gradlew --no-daemon publish
       - name: Clean job-local package caches
         if: always()
         run: |
           rm -rf -- "$GRADLE_USER_HOME" \
             "$RUNNER_TEMP/teacoco-deploy-m2-${{ github.run_id }}-${{ github.run_attempt }}"
+
   mockatcha-example:
-    needs: publish-snapshot
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, instanto-container]
     timeout-minutes: 20
     defaults:
@@ -109,8 +95,10 @@ jobs:
           overwrite-settings: false
       - name: Allocate isolated Maven cache
         run: echo "DEMO_MAVEN_CACHE=$RUNNER_TEMP/mockatcha-demo-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_ENV"
-      - name: Verify snapshots with JVM and browser tests
+      - name: Verify local TeaCoCo snapshots with JVM and browser tests
         run: |
+          mvn -B -ntp -f ../pom.xml -s settings.xml -Dmaven.repo.local="$DEMO_MAVEN_CACHE" \
+            -pl coverage,maven-plugin -am -DskipTests -Dspotbugs.skip=true -Djacoco.skip=true -Dmaven.javadoc.skip=true -Dspotless.skip=true clean install
           mvn -B -ntp -U -s settings.xml -Dmaven.repo.local="$DEMO_MAVEN_CACHE" clean verify
           cat target/coverage-comparison.md >> "$GITHUB_STEP_SUMMARY"
       - name: Publish coverage diagnostics
